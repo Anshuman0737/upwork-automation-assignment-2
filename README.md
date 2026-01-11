@@ -1,4 +1,3 @@
-
 # AI Engineer Intern Assignment 2 – Upwork Automation
 
 ## Overview
