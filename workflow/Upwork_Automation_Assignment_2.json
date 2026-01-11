@@ -1,0 +1,158 @@
+{
+  "name": "Upwork Automation Assignment 2",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "cronExpression": "0 */8 * * *"
+      },
+      "id": "1",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://api.apify.com/v2/acts/your-apify-username~upwork-scraper/run-sync?token={{ $credentials.apifyApiToken }}",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "{}"
+      },
+      "id": "2",
+      "name": "Run Apify Upwork Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "/* Normalize Apify dataset items into a common structure */\nreturn items.map(item => ({\n  json: {\n    id: item.json.id || item.json.jobId || null,\n    title: item.json.title || item.json.name || \"\",\n    description: item.json.description || \"\",\n    budget: item.json.budget || item.json.pay || null,\n    url: item.json.url || item.json.link || \"\",\n    raw: item.json\n  }\n}));"
+      },
+      "id": "3",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "temperature": 0.2,
+        "systemPrompt": "You are an assistant that scores Upwork job listings by fit and priority.",
+        "prompt": "Score this job listing with an object containing: {priority: \"High|Medium|Low\", score:0-100, reasons:[strings], proposal_snippet:string}. Return JSON only.",
+        "input": "{{$json}}"
+      },
+      "id": "4",
+      "name": "OpenAI - Job Scoring",
+      "type": "n8n-nodes-base.openai",
+      "typeVersion": 1,
+      "position": [
+        1050,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "application": "Your Airtable Base Name",
+        "table": "Jobs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "field": "Title",
+              "value": "={{ $json[\"title\"] }}"
+            },
+            {
+              "field": "Score",
+              "value": "={{ $json[\"score\"] || $json[\"openai\"]?.score }}"
+            },
+            {
+              "field": "Priority",
+              "value": "={{ $json[\"priority\"] || $json[\"openai\"]?.priority }}"
+            },
+            {
+              "field": "URL",
+              "value": "={{ $json[\"url\"] }}"
+            },
+            {
+              "field": "Proposal Snippet",
+              "value": "={{ $json[\"proposal_snippet\"] || $json[\"openai\"]?.proposal_snippet }}"
+            },
+            {
+              "field": "Raw",
+              "value": "={{ JSON.stringify($json[\"raw\"]) }}"
+            }
+          ]
+        }
+      },
+      "id": "5",
+      "name": "Airtable - Save Job",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Run Apify Upwork Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Apify Upwork Scraper": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Job Scoring",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Job Scoring": {
+      "main": [
+        [
+          {
+            "node": "Airtable - Save Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "active": true,
+  "id": "upwork-automation-assignment-2-workflow"
+}
